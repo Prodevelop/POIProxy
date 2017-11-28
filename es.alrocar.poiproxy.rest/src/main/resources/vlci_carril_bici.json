@@ -1,0 +1,42 @@
+{
+  "format": "json",
+  "apiKey": "",
+  "csvSeparator": ";",
+  "categories": [
+    "carril-bici"
+  ],
+  "SRS": "EPSG:25830",
+  "useLocalFilter": true,
+  "requestTypes": {
+    "browse": {
+      "url": "http://mapas.valencia.es/lanzadera/opendata/Tra-carril-bici/JSON",
+      "params": []
+    },
+    "search": {
+      "url": "http://mapas.valencia.es/lanzadera/opendata/Tra-carril-bici/JSON",
+      "params": []
+    }
+  },
+  "featureTypes": {
+    "browse": {
+      "feature": "estado",	
+      "elements": {
+      	"state" : {
+      	  "input": "estado"
+      	}
+      },
+      "lon": "coordinates",
+      "lat": "coordinates"
+    },
+    "search": {
+      "feature": "estado",
+      "elements": {
+     	"state" : {
+      	  "input": "estado"
+      	}
+      },
+      "lon": "coordinates",
+      "lat": "coordinates"
+    }
+  }
+}

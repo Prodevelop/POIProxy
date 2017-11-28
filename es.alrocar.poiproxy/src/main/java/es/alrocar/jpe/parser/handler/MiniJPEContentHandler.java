@@ -29,14 +29,19 @@
  *   http://www.prodevelop.es
  * 
  * @author Alberto Romeu Carrasco http://www.albertoromeu.com
+ * @developer Sergi Soler Sanchis ssoler@prodevelop.es
  */
 
 package es.alrocar.jpe.parser.handler;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import com.vividsolutions.jts.geom.Coordinate;
+import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.GeometryFactory;
+import com.vividsolutions.jts.geom.LineString;
+import com.vividsolutions.jts.geom.LinearRing;
 
 import es.alrocar.poiproxy.geotools.GeotoolsUtils;
 import es.prodevelop.gvsig.mini.exceptions.BaseException;
@@ -55,6 +60,7 @@ import es.prodevelop.gvsig.mini.geom.impl.jts.JTSGeometry;
 public class MiniJPEContentHandler implements JPEContentHandler {
 
 	ArrayList featureCollections = new ArrayList();
+	List points;
 
 	/**
 	 * {@inheritDoc}
@@ -93,6 +99,20 @@ public class MiniJPEContentHandler implements JPEContentHandler {
 		Point p = new Point();
 		return p;
 	}
+	/**
+	 * {@inheritDoc}
+	 */
+	public Object endLineString(Coordinate[] points) {
+		LineString ls = new LineString(points, null, 4326);
+		return ls;
+	}
+	/**
+	 * {@inheritDoc}
+	 */
+	public Object endPolygon(Coordinate[] points) {
+		LinearRing poly = new LinearRing(points, null, 4326);
+		return poly;
+	}
 
 	/**
 	 * {@inheritDoc}
@@ -113,7 +133,7 @@ public class MiniJPEContentHandler implements JPEContentHandler {
 	/**
 	 * {@inheritDoc}
 	 */
-	public Object endPoint(Object point, String from, String to) {
+	public Object endPoint(Object point, String from, String to, Integer position) {
 		GeometryFactory factory = new GeometryFactory();
 		Coordinate coord = new Coordinate();
 		coord.x = ((Point) point).getX();
@@ -136,9 +156,9 @@ public class MiniJPEContentHandler implements JPEContentHandler {
 	/**
 	 * {@inheritDoc}
 	 */
-	public Object addPointToFeature(Object feature, Object point) {
+	public Object addGeometryToFeature(Object feature, Object geometry) {
 		((JTSFeature) feature).setGeometry(new JTSGeometry(
-				(com.vividsolutions.jts.geom.Point) point));
+				(com.vividsolutions.jts.geom.Geometry) geometry));
 		return feature;
 	}
 
@@ -168,4 +188,62 @@ public class MiniJPEContentHandler implements JPEContentHandler {
 		((ArrayList) featureCollection).add(feature);
 		return featureCollection;
 	}
+
+	@Override
+	public Object addYToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(double y, Object geometry,
+			int position) {
+		// TODO Auto-generated method stub
+		return geometry;
+	}
+
+	@Override
+	public Object addXToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(double x, Object geometry,
+			int position) {
+		// TODO Auto-generated method stub
+		return geometry;
+	}
+	@Override
+	public Object startPolygon() {
+		points = new ArrayList<Coordinate>();
+		return null;
+		
+	}
+	@Override
+	public Object startLineString() {
+		points = new ArrayList<Coordinate>();
+		return null;
+		
+	}
+
+	@Override
+	public Object addPointToGeometry(Object point, String from, String to, Integer position, Boolean isLastPoint) {
+		com.vividsolutions.jts.geom.Point pointJTS = (com.vividsolutions.jts.geom.Point) this.endPoint(point, from, to, position);
+
+		points.add(pointJTS.getCoordinate());
+		return points;
+	}
+
+	@Override
+	public Object endGeometry(Object geomType) {
+		//Coordinate[] pointsObject =  (Coordinate[]) points.toArray();
+		Coordinate[] pointsObject = new Coordinate[points.size()];
+		int counter = 0;
+		for (Object point : points){
+			Coordinate pointCoord = (Coordinate) points.get(counter);
+			pointsObject[counter] = pointCoord;
+			counter ++;			
+		}
+		points = null;
+		Geometry geometryJTS = null;
+		
+
+		if (geomType.equals("LineString")){
+			geometryJTS= new LineString(pointsObject,null, 4326);
+		} else {
+			geometryJTS= new LinearRing(pointsObject,null, 4326);
+		}
+		return geometryJTS;
+		
+
+	}	
 }

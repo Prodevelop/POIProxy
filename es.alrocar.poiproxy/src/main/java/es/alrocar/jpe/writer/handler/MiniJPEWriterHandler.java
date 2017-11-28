@@ -29,6 +29,7 @@
  *   http://www.prodevelop.es
  * 
  * @author Alberto Romeu Carrasco http://www.albertoromeu.com
+ * @developer Sergi Soler Sanchis ssoler@prodevelop.es
  */
 
 package es.alrocar.jpe.writer.handler;
@@ -136,6 +137,40 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 	/**
 	 * {@inheritDoc}
 	 */
+	public Object startLineString() {
+		Map geometry = new LinkedHashMap();
+		JSONArray coordsArrayContainer = new JSONArray();
+		JSONArray coords = new JSONArray();
+		coords.add(0);
+		coords.add(0);
+		coordsArrayContainer.add(coords);
+
+		geometry.put("type", "LineString");
+		geometry.put("coordinates", coordsArrayContainer);
+
+		return geometry;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public Object startPolygon() {
+		Map geometry = new LinkedHashMap();
+		JSONArray coordsArrayContainer = new JSONArray();
+		JSONArray coords = new JSONArray();
+		coords.add(0);
+		coords.add(0);
+		coordsArrayContainer.add(coords);
+
+		geometry.put("type", "Polygon");
+		geometry.put("coordinates", coordsArrayContainer);
+
+		return geometry;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
 	public Object addXToPoint(double x, Object point) {
 
 		((JSONArray) ((LinkedHashMap) point).get("coordinates")).set(0, x);
@@ -156,27 +191,52 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 	/**
 	 * {@inheritDoc}
 	 */
-	public Object endPoint(Object point, String from, String to) {
-		JSONArray coords = ((JSONArray) ((LinkedHashMap) point)
-				.get("coordinates"));
+	@SuppressWarnings("unchecked")
+	public Object addXToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(double x, Object geometry,
+			int position) {
 
+		((JSONArray) ((JSONArray) ((LinkedHashMap) geometry).get("coordinates")).get(position)).set(0, x);
+
+		return geometry;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	@SuppressWarnings("unchecked")
+	public Object addYToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(double y, Object geometry,
+			int position) {
+
+		((JSONArray) ((JSONArray) ((LinkedHashMap) geometry).get("coordinates")).get(position)).set(1, y);
+
+		return geometry;
+	}
+
+	/**
+	 * {@inheritDoc}
+	 */
+	public Object endPoint(Object geometry, String from, String to, Integer position) {
+		JSONArray coords;
+		coords = ((JSONArray) ((LinkedHashMap) geometry).get("coordinates"));
+
+		coords = this.transform(from, to, coords);
+		((LinkedHashMap) geometry).put("coordinates", coords);
+
+		return geometry;
+	}
+
+	protected JSONArray transform(String from, String to, JSONArray coords) {
 		try {
-			double[] xy = GeotoolsUtils.transform(
-					from,
-					to,
-					new double[] {
-							Double.valueOf(String.valueOf(coords.get(0))),
-							Double.valueOf(String.valueOf(coords.get(1))) });
+			double[] xy = GeotoolsUtils.transform(from, to, new double[] {
+					Double.valueOf(String.valueOf(coords.get(0))), Double.valueOf(String.valueOf(coords.get(1))) });
 			if (xy != null) {
 				coords.set(0, xy[0]);
 				coords.set(1, xy[1]);
-				((LinkedHashMap) point).put("coordinates", coords);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
-		return point;
+		return coords;
 	}
 
 	/**
@@ -192,8 +252,7 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 	/**
 	 * {@inheritDoc}
 	 */
-	public Object addFeatureToCollection(Object featureCollection,
-			Object feature) {
+	public Object addFeatureToCollection(Object featureCollection, Object feature) {
 		features.add(featureCount++, feature);
 
 		return featureCollection;
@@ -202,9 +261,9 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 	/**
 	 * {@inheritDoc}
 	 */
-	public Object addPointToFeature(Object feature, Object point) {
+	public Object addGeometryToFeature(Object feature, Object geometry) {
 
-		((Map) feature).put("geometry", point);
+		((Map) feature).put("geometry", geometry);
 
 		return feature;
 	}
@@ -255,10 +314,8 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 			Object f = this.startFeature();
 			Object p = this.startPoint();
 			try {
-				this.addXToPoint(feature.getGeometry().getGeometry()
-						.getCentroid().getX(), p);
-				this.addYToPoint(feature.getGeometry().getGeometry()
-						.getCentroid().getY(), p);
+				this.addXToPoint(feature.getGeometry().getGeometry().getCentroid().getX(), p);
+				this.addYToPoint(feature.getGeometry().getGeometry().getCentroid().getY(), p);
 			} catch (BaseException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
@@ -267,12 +324,11 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 			Iterator it = feature.getAttributes().keySet().iterator();
 			while (it.hasNext()) {
 				String key = it.next().toString();
-				this.addElementToFeature(feature.getAttribute(key).value, key,
-						f);
+				this.addElementToFeature(feature.getAttribute(key).value, key, f);
 			}
 
-			p = this.endPoint(p, null, null);
-			this.addPointToFeature(f, p);
+			p = this.endPoint(p, null, null, null);
+			this.addGeometryToFeature(f, p);
 			this.endFeature(f);
 			this.addFeatureToCollection(fcJSON, f);
 		}
@@ -281,4 +337,30 @@ public class MiniJPEWriterHandler implements JPEContentHandler {
 
 		return this.featureCollectionAsJSON((org.json.JSONObject) fcJSON);
 	}
+
+	@Override
+	public Object addPointToGeometry(Object geometry, String from, String to, Integer position, Boolean isLastPoint) {
+
+		JSONArray coords = new JSONArray();
+		coords.add(0);
+		coords.add(0);
+
+		JSONArray lastCoords = (JSONArray) ((JSONArray) ((LinkedHashMap) geometry).get("coordinates")).get(position);
+		JSONArray coordsTransformed = transform(from, to, lastCoords);
+
+		if (!isLastPoint){
+			((JSONArray) ((LinkedHashMap) geometry).get("coordinates")).add(coords);
+		}
+		
+		return geometry;
+	}
+
+	@Override
+	public Object endGeometry(Object currentGeometryGeoJSON) {
+		int size = ((JSONArray) ((LinkedHashMap) currentGeometryGeoJSON).get("coordinates")).size();
+		((JSONArray) ((LinkedHashMap) currentGeometryGeoJSON).get("coordinates")).remove(size - 1);
+		return currentGeometryGeoJSON;
+
+	}
+
 }

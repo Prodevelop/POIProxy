@@ -29,18 +29,15 @@
  *   http://www.prodevelop.es
  * 
  * @author Alberto Romeu Carrasco http://www.albertoromeu.com
+ * @developer Sergi Soler Sanchis ssoler@prodevelop.es
  */
 
 package es.alrocar.jpe.parser.handler;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.EmptyStackException;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Stack;
 
-import org.apache.commons.lang3.StringEscapeUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.xml.sax.Attributes;
 
 import es.alrocar.jpe.parser.JPEParser;
@@ -84,11 +81,10 @@ public class BaseContentHandler {
 	private LocalFilter localFilter;
 	private boolean hasPassedLocalFilter = false;
 	private String currentObjectKey;
-	private String firstObjectKey;
 	private String currentLocalName;
 	private boolean firstObject = true;
-
-	private Stack<String> stackObjectKey = new Stack<String>();
+	private String currentGeomType;
+	private int coordinatesCounter;
 
 	/**
 	 * A {@link LocalFilter} instance to apply filters on the features to be
@@ -171,23 +167,29 @@ public class BaseContentHandler {
 	public void processValue(String arg0) {
 		// System.out.println(this.currentKey);
 		// System.out.println(arg0);
-		arg0 = normalizeValue(arg0);
 		if (arg0 == null || this.currentFeatureGeoJSON == null || arg0.trim().isEmpty())
 			return;
 		// System.out.println(this.currentKey + " : " + arg0);
 		FeatureType fType = this.currentFeatureType;
 		final int size = fType.getElements().size();
 
-		// HACK for the special case when lon and lat came in an array
+		// HACK for the special case when lon and lat come in an array
 		if (processedLat && processedLon) {
 			processedLat = false;
 			processedLon = false;
+			//this.currentPoint = contentHandler.endPoint(this.currentPoint, this.service.getSRS(),
+					//DescribeService.DEFAULT_SRS, this.coordinatesCounter);
+			if (!this.currentGeomType.equals("Point")){
+				contentHandler.addPointToGeometry(this.currentPoint, this.service.getSRS(), DescribeService.DEFAULT_SRS, coordinatesCounter, false);
+				this.currentGeometryGeoJSON = writerContentHandler.addPointToGeometry(this.currentGeometryGeoJSON, this.service.getSRS(), DescribeService.DEFAULT_SRS, coordinatesCounter, false);
+				coordinatesCounter++;
+			}
+
 		}
 
 		for (String destProp : fType.getElements().keySet()) {
 			if (hasToBeParsed(fType, destProp)) {
 				checkValidAttribute(localFilter, arg0.toString());
-				fType.getElements().get(destProp).encode(arg0.toString());
 				if (writerContentHandler != null)
 					writerContentHandler.addElementToFeature(service.encode(arg0.toString()), destProp,
 							this.currentFeatureGeoJSON);
@@ -197,16 +199,44 @@ public class BaseContentHandler {
 				return;
 			}
 		}
+		if (hasToParseGeomType()) {
+			this.currentGeomType = arg0;
+			try {
+				Method method = writerContentHandler.getClass().getMethod("start" + this.currentGeomType);
+				this.currentGeometryGeoJSON = method.invoke(writerContentHandler);
+				Method contentHandlerMethod = contentHandler.getClass().getMethod("start" + this.currentGeomType);
+				contentHandlerMethod.invoke(contentHandler);
+				
+			} catch (NoSuchMethodException e) {
+				e.printStackTrace();
+			} catch (SecurityException e) {
+				e.printStackTrace();
+			} catch (IllegalAccessException e) {
+				e.printStackTrace();
+			} catch (IllegalArgumentException e) {
+				e.printStackTrace();
+			} catch (InvocationTargetException e) {
+				e.printStackTrace();
+			}
+
+		} else if (isPointGeometryType()) {
+			this.currentGeometryGeoJSON = writerContentHandler.startPoint();
+		}
 
 		if (hasToParsePosition(fType) && fType.getLon() != null && currentKey.toString().compareTo(fType.getLon()) == 0
 				&& !processedLon) {
 			double lon = Utils.formatNumber(arg0.toString(), service.getDecimalSeparator(),
 					service.getNumberSeparator());
-			if (this.currentGeometryGeoJSON == null)
-				this.currentGeometryGeoJSON = writerContentHandler.startPoint();
-			if (writerContentHandler != null)
-				writerContentHandler.addXToPoint(new Double(lon), this.currentGeometryGeoJSON);
-			contentHandler.addXToPoint(new Double(lon), this.currentPoint);
+			if (!this.currentGeomType.equals("Point")) {
+				if (writerContentHandler != null)
+					writerContentHandler.addXToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(new Double(lon),
+							this.currentGeometryGeoJSON, this.coordinatesCounter);
+			} else {
+
+				if (writerContentHandler != null)
+					writerContentHandler.addXToPoint(new Double(lon), this.currentGeometryGeoJSON);
+				contentHandler.addXToPoint(new Double(lon), this.currentPoint);
+			}
 			processedLon = true;
 			return;
 		}
@@ -215,11 +245,15 @@ public class BaseContentHandler {
 				&& !processedLat) {
 			double lat = Utils.formatNumber(arg0.toString(), service.getDecimalSeparator(),
 					service.getNumberSeparator());
-			if (this.currentGeometryGeoJSON == null)
-				this.currentGeometryGeoJSON = writerContentHandler.startPoint();
-			if (writerContentHandler != null)
-				writerContentHandler.addYToPoint(new Double(lat), this.currentGeometryGeoJSON);
-			contentHandler.addYToPoint(new Double(lat), this.currentPoint);
+			if (!this.currentGeomType.equals("Point")) {
+				if (writerContentHandler != null)
+					writerContentHandler.addYToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(new Double(lat),
+							this.currentGeometryGeoJSON, this.coordinatesCounter);
+			} else {
+				if (writerContentHandler != null)
+					writerContentHandler.addYToPoint(new Double(lat), this.currentGeometryGeoJSON);
+				contentHandler.addYToPoint(new Double(lat), this.currentPoint);
+			}
 			processedLat = true;
 			return;
 		}
@@ -257,12 +291,9 @@ public class BaseContentHandler {
 		return;
 	}
 
-	private String normalizeValue(String arg0) {
-		 arg0 = StringUtils.stripAccents(arg0);
-		 arg0 = StringEscapeUtils.escapeJava(arg0);
-		 arg0 = arg0.replaceAll("\"", "").replace("'", "");
-		return arg0;
-
+	private boolean isPointGeometryType() {
+		return this.currentGeomType != null && this.currentGeomType.equals("Point")
+				&& this.currentGeometryGeoJSON == null;
 	}
 
 	private boolean hasToParsePosition(FeatureType fType) {
@@ -300,6 +331,7 @@ public class BaseContentHandler {
 		geoJSON = null;
 		currentFeatureGeoJSON = null;
 		currentGeometryGeoJSON = null;
+		currentGeomType = "Point";
 
 		if (writerContentHandler != null)
 			this.geoJSON = writerContentHandler.startFeatureCollection();
@@ -330,11 +362,11 @@ public class BaseContentHandler {
 			endNewElement();
 			if (writerContentHandler != null) {
 				this.currentFeatureGeoJSON = writerContentHandler.startFeature();
-				this.currentGeometryGeoJSON = writerContentHandler.startPoint();
 			}
 
 			this.currentFeature = contentHandler.startFeature();
 			this.currentPoint = contentHandler.startPoint();
+			this.coordinatesCounter = 0;
 		}
 
 		this.currentLocalName = localName;
@@ -349,6 +381,12 @@ public class BaseContentHandler {
 				this.processValue(value);
 			}
 		}
+	}
+
+	private boolean hasToParseGeomType() {
+
+		return currentObjectKey != null && currentObjectKey.equals("geometry") && currentLocalName.equals("type")
+				&& this.coordinatesCounter == 0;
 	}
 
 	protected boolean isEndElement(String arg0) {
@@ -381,20 +419,27 @@ public class BaseContentHandler {
 						service);
 				this.currentFeatureGeoJSON = this.fillService(writerContentHandler, this.currentFeatureGeoJSON,
 						service);
+				if (this.currentGeomType.equals("Point")) {
+					this.currentFeatureGeoJSON = writerContentHandler.addGeometryToFeature(this.currentFeatureGeoJSON,
+							writerContentHandler.endPoint(this.currentGeometryGeoJSON, this.service.getSRS(),
+									DescribeService.DEFAULT_SRS, null));
+				} else {
+					this.currentFeatureGeoJSON = writerContentHandler.addGeometryToFeature(this.currentFeatureGeoJSON, writerContentHandler.endGeometry(writerContentHandler.addPointToGeometry(this.currentGeometryGeoJSON, this.service.getSRS(), DescribeService.DEFAULT_SRS, this.coordinatesCounter, true)));
 
-				this.fillEmptyAttributes(writerContentHandler, this.currentFeatureGeoJSON, service);
-
-				this.currentFeatureGeoJSON = writerContentHandler.addPointToFeature(this.currentFeatureGeoJSON,
-						writerContentHandler.endPoint(this.currentGeometryGeoJSON, this.service.getSRS(),
-								DescribeService.DEFAULT_SRS));
+				}
 				this.currentFeatureGeoJSON = writerContentHandler.endFeature(this.currentFeatureGeoJSON);
 				writerContentHandler.addFeatureToCollection(this.geoJSON, this.currentFeatureGeoJSON);
 			}
 			this.currentFeature = this.fillCategories(contentHandler, this.currentFeature, service);
 			this.currentFeature = this.fillService(contentHandler, this.currentFeature, service);
+			if (this.currentGeomType.equals("Point")) {
+				this.currentFeature = contentHandler.addGeometryToFeature(this.currentFeature, contentHandler
+						.endPoint(this.currentPoint, this.service.getSRS(), DescribeService.DEFAULT_SRS, null));
+			} else {
+				this.currentFeature = contentHandler.addGeometryToFeature(this.currentFeature, contentHandler
+						.endGeometry(this.currentGeomType));
+			}
 
-			this.currentFeature = contentHandler.addPointToFeature(this.currentFeature,
-					contentHandler.endPoint(this.currentPoint, this.service.getSRS(), DescribeService.DEFAULT_SRS));
 			this.currentFeature = contentHandler.endFeature(this.currentFeature);
 			contentHandler.addFeatureToCollection(this.featureCollection, this.currentFeature);
 			hasPassedLocalFilter = false;
@@ -403,19 +448,6 @@ public class BaseContentHandler {
 
 	public Object fillService(JPEContentHandler handler, Object feature, DescribeService service) {
 		return handler.addElementToFeature(service.encode(service.getId()), JPEParser.SERVICE, feature);
-	}
-
-	public void fillEmptyAttributes(JPEContentHandler handler, Object feature, DescribeService service) {
-		if (service.getFillEmptyAttributes() != null) {
-			LinkedHashMap feat = (LinkedHashMap) feature;
-			FeatureType type = service.getFeatureTypes().get(service.getType());
-			for (String key : type.getElements().keySet()) {
-				Object attr = ((Map) feat.get("properties")).get(key);
-				if (attr == null || attr.toString() == null) {
-					handler.addElementToFeature(service.getFillEmptyAttributes(), key, feature);
-				}
-			}
-		}
 	}
 
 	public Object fillCategories(JPEContentHandler handler, Object feature, DescribeService service) {
@@ -429,35 +461,6 @@ public class BaseContentHandler {
 	 */
 	public void onStartObject() {
 		this.currentObjectKey = this.currentLocalName;
-		if (this.firstObjectKey == null && this.currentLocalName != null) {
-			this.firstObjectKey = this.currentObjectKey;
-		}
 
-		if (this.currentObjectKey != null) {
-			stackObjectKey.push(this.currentObjectKey);
-		} else {
-			if (!stackObjectKey.isEmpty()) {
-				this.currentObjectKey = stackObjectKey.peek();
-			} else {
-				this.currentObjectKey = this.firstObjectKey;
-			}
-		}
-	}
-
-	public void onEndObject() {
-		this.currentObjectKey = this.getPrevCurrentName();
-	}
-
-	private String getPrevCurrentName() {
-		try {
-			this.stackObjectKey.pop();
-			if (this.stackObjectKey.size() == 1) {
-				this.currentLocalName = null;
-			}
-			return this.stackObjectKey.peek();
-		} catch (EmptyStackException e) {
-			this.currentLocalName = null;
-			return this.firstObjectKey;
-		}
 	}
 }

@@ -1,0 +1,78 @@
+{
+  "format": "json",
+  "apiKey": "",
+  "csvSeparator": ";",
+  "categories": [
+    "valenbisi"
+  ],
+  "SRS": "EPSG:25830",
+  "useLocalFilter": true,
+  "requestTypes": {
+    "browse": {
+      "url": "http://mapas.valencia.es/lanzadera/opendata/Valenbisi/JSON",
+      "params": []
+    },
+    "search": {
+      "url": "http://mapas.valencia.es/lanzadera/opendata/Valenbisi/JSON",
+      "params": []
+    }
+  },
+  "featureTypes": {
+    "browse": {
+      "feature": "name",	
+      "elements": {
+      	"name" : {
+      	  "input": "name"
+      	},
+        "number": {
+          "input": "number"
+        },
+        "address": {
+          "input": "address"
+        },
+        "available": {
+          "input": "available"
+        },
+        "free": {
+          "input": "free"
+        },
+        "total": {
+          "input": "total"
+        },
+        "updated": {
+          "input": "updated_at"
+        }
+      },
+      "lon": "coordinates",
+      "lat": "coordinates"
+    },
+    "search": {
+      "feature": "features",
+      "elements": {
+      	"name" : {
+      	  "input": "name"
+      	},
+        "number": {
+          "input": "number"
+        },
+        "address": {
+          "input": "address"
+        },
+        "available": {
+          "input": "available"
+        },
+        "free": {
+          "input": "free"
+        },
+        "total": {
+          "input": "total"
+        },
+        "updated": {
+          "input": "updated"
+        }
+      },
+      "lon": "coordinates",
+      "lat": "coordinates"
+    }
+  }
+}

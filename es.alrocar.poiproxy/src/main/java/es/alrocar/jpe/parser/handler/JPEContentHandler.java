@@ -116,7 +116,7 @@ public interface JPEContentHandler {
 	 *            The EPSG code of the destination SRS
 	 * @return The point object
 	 */
-	public Object endPoint(Object point, String from, String to);
+	public Object endPoint(Object point, String from, String to, Integer position);
 
 	/**
 	 * Event thrown when a new attribute has to be added to the current feature
@@ -153,6 +153,17 @@ public interface JPEContentHandler {
 	 *            The point
 	 * @return The feature
 	 */
-	public Object addPointToFeature(Object feature, Object point);
+	public Object addGeometryToFeature(Object feature, Object geometry);
+	public Object addYToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(double y, Object geometry, int position);
+
+	public Object addXToCoordinateArrayByPositionToMoreThanZeroDimensionGeometry(double x, Object geometry, int position);
+
+	public Object startPolygon();
+
+	public Object startLineString();
+
+	public Object addPointToGeometry(Object currentPoint, String from, String to, Integer position, Boolean isLastPoint);
+
+	public Object endGeometry(Object geomType);
 
 }

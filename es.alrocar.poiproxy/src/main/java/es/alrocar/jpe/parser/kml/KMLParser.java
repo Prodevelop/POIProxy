@@ -150,9 +150,9 @@ public class KMLParser extends DefaultJPEParser {
 					e.printStackTrace();
 				}
 
-				contentHandler.addPointToFeature(feature, contentHandler
+				contentHandler.addGeometryToFeature(feature, contentHandler
 						.endPoint(point, service.getSRS(),
-								DescribeService.DEFAULT_SRS));
+								DescribeService.DEFAULT_SRS, null));
 				if (hasPassedFilter) {
 					fillCategories(feature, service);
 					fillService(feature, service);
